@@ -1,0 +1,90 @@
+# Scheduled Task Detection — Validation Evidence
+
+## Purpose
+
+This directory stores evidence demonstrating the validation and testing of the Scheduled Task Detection project.
+
+The evidence should make a clear distinction between synthetic test results and validation performed against actual Microsoft Sentinel telemetry.
+
+## Validation Summary
+
+| Validation Activity | Status | Evidence |
+|---|---|---|
+| Synthetic test cases | Passed — 6/6 | `scheduled-task-test-cases.kql` |
+| Raw EventData detection | User-reported positive validation | Sentinel query results to be captured |
+| Negative-case validation | User-reported positive validation | Sentinel query results to be captured |
+| Structured XML extraction | Pending | Awaiting confirmed EventData structure |
+| Production analytics rule | Pending | Deployment evidence to be added |
+
+## Evidence to Collect
+
+### 1. Synthetic Test Results
+
+Capture the output of the synthetic KQL test harness showing:
+
+- All six test cases.
+- Expected detection result.
+- Actual detection result.
+- PASS/FAIL status.
+
+Suggested filename:
+
+`synthetic-test-results.png`
+
+### 2. Real Sentinel Telemetry
+
+Capture sanitized screenshots showing:
+
+- Scheduled-task events with EventID 4698 and 4702.
+- Detection results from the raw EventData query.
+- Correct identification of suspicious paths and arguments.
+- Negative cases that did not trigger the detection.
+
+Suggested filenames:
+
+- `sentinel-scheduled-task-events.png`
+- `sentinel-detection-positive-results.png`
+- `sentinel-negative-test-results.png`
+
+### 3. Structured Field Extraction
+
+After validating the XML extraction query, capture evidence showing:
+
+- Extracted task name.
+- Extracted executable command.
+- Extracted execution arguments.
+- Correct matching against the original event payload.
+
+Suggested filename:
+
+`structured-eventdata-extraction.png`
+
+### 4. Production Deployment
+
+After deploying the analytics rule, capture:
+
+- Analytics rule configuration.
+- MITRE ATT&CK mapping.
+- Severity configuration.
+- Entity mapping.
+- Generated alert or incident.
+
+Suggested filename:
+
+`sentinel-analytics-rule-deployment.png`
+
+## Evidence Handling
+
+- Remove usernames, domain names, hostnames, IP addresses, and other sensitive organizational information before publishing.
+- Never upload confidential raw event payloads.
+- Do not present synthetic test results as real-world attack detection.
+- Keep screenshots consistent with the documented detection version.
+- Record the date and environment for each validation activity.
+
+## Current Project Status
+
+Synthetic detection logic has passed six test cases. Positive and negative checks against raw Sentinel telemetry have been reported as successful by the project author.
+
+Structured XML extraction and production analytics-rule deployment remain pending.
+
+This evidence directory should be updated as each validation and deployment milestone is completed.
