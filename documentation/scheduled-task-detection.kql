@@ -1,0 +1,72 @@
+// Detection: Suspicious Scheduled Task Creation or Modification
+// MITRE ATT&CK: T1053.005
+// Telemetry: Windows Security Events 4698 and 4702
+// Status: Provisional; raw EventData matching requires validation.
+
+
+// Important validation notes
+// 1. This searches the raw payload. It does not yet extract the exact task name, executable path, or arguments into dedicated columns.
+// 2. The regex and path indicators need testing against your actual event payloads. XML encoding and quoting may affect matching.
+// 3. DetectionConfidence is a query classification, not Sentinel's configured alert severity.
+// 4. For different alert severities, we can use separate analytics rules: a high-severity rule for the combined indicators and a medium-severity rule for individual indicators. We should avoid duplicate incidents through appropriate grouping and suppression.
+
+SecurityEvent
+| where TimeGenerated >= ago(7d)
+| where EventID in (4698, 4702)
+| extend Payload = tolower(tostring(EventData))
+
+// Identify potentially risky executable locations
+| extend RiskyPath = Payload contains @"\users\public\"
+    or Payload contains @"\appdata\roaming\"
+    or Payload contains @"\appdata\local\temp\"
+    or Payload contains @"\windows\temp\"
+
+// Identify suspicious PowerShell execution arguments
+| extend EncodedPowerShell =
+    Payload matches regex @"(?i)(?:^|\s)-(?:encodedcommand|enc|ec)(?:\s|=|:)"
+
+| extend HiddenExecution =
+    Payload matches regex @"(?i)-windowstyle\s+hidden"
+
+| extend ExecutionPolicyBypass =
+    Payload matches regex @"(?i)-executionpolicy\s+bypass"
+
+// Combine indicators
+| extend SuspiciousArguments =
+    EncodedPowerShell or HiddenExecution or ExecutionPolicyBypass
+
+// Classify the detection
+| extend DetectionReason = case(
+    RiskyPath and SuspiciousArguments,
+        "Risky path + suspicious execution arguments",
+    RiskyPath,
+        "Risky executable path",
+    SuspiciousArguments,
+        "Suspicious execution arguments",
+    "No suspicious indicators"
+)
+
+// Assign a proposed confidence classification
+| extend DetectionConfidence = case(
+    RiskyPath and SuspiciousArguments, "High",
+    RiskyPath or SuspiciousArguments, "Medium",
+    "Informational"
+)
+
+// Retain suspicious events
+| where RiskyPath or SuspiciousArguments
+
+// Analyst-friendly output
+| project
+    TimeGenerated,
+    Computer,
+    EventID,
+    Account,
+    DetectionConfidence,
+    DetectionReason,
+    RiskyPath,
+    EncodedPowerShell,
+    HiddenExecution,
+    ExecutionPolicyBypass,
+    EventData
+| order by TimeGenerated desc
