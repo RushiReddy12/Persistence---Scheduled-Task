@@ -1,0 +1,156 @@
+# Scheduled Task Detection — Test Cases
+
+## Purpose
+
+This test suite validates the detection logic for suspicious scheduled-task executable paths and execution arguments.
+
+It uses synthetic test data to validate detection behavior independently of the production Sentinel telemetry.
+
+**MITRE ATT&CK:** T1053.005 — Scheduled Task/Job: Scheduled Task
+
+## Test Coverage
+
+| Test Case | Scenario | Expected Result |
+|---|---|---|
+| TC01 | Executable in `C:\Users\Public\` | Match |
+| TC02 | PowerShell with `-EncodedCommand` | Match |
+| TC03 | Legitimate executable with normal arguments | No match |
+| TC04 | Risky path with hidden execution | Match |
+| TC05 | Legitimate monitoring executable | No match |
+| TC06 | Executable in `AppData\Roaming` | Match |
+
+## KQL Test Harness
+
+```kql
+let TestData = datatable(
+    TestCase:string,
+    ExecutablePath:string,
+    Arguments:string,
+    ExpectedMatch:bool
+)
+[
+    "TC01",
+    @"C:\Users\Public\update.exe",
+    "Normal",
+    true,
+
+    "TC02",
+    @"C:\Windows\System32\powershell.exe",
+    "-EncodedCommand ABC123",
+    true,
+
+    "TC03",
+    @"C:\Program Files\Backup\agent.exe",
+    "Normal",
+    false,
+
+    "TC04",
+    @"C:\Users\Public\update.exe",
+    "-WindowStyle Hidden",
+    true,
+
+    "TC05",
+    @"C:\Program Files\Monitoring\agent.exe",
+    "Normal",
+    false,
+
+    "TC06",
+    @"C:\Users\john\AppData\Roaming\update.exe",
+    "Normal",
+    true
+];
+
+TestData
+| extend NormalizedPath = tolower(ExecutablePath)
+| extend NormalizedArguments = tolower(Arguments)
+
+| extend SuspiciousPath =
+    NormalizedPath contains @"\users\public\"
+    or NormalizedPath contains @"\appdata\roaming\"
+    or NormalizedPath contains @"\appdata\local\temp\"
+    or NormalizedPath contains @"\windows\temp\"
+
+| extend EncodedPowerShell =
+    NormalizedArguments matches regex
+    @"(?i)(?:^|\s)-(?:encodedcommand|enc|ec)(?:\s|=|:)"
+
+| extend HiddenExecution =
+    NormalizedArguments matches regex
+    @"(?i)-windowstyle\s+hidden"
+
+| extend ExecutionPolicyBypass =
+    NormalizedArguments matches regex
+    @"(?i)-executionpolicy\s+bypass"
+
+| extend SuspiciousArguments =
+    EncodedPowerShell
+    or HiddenExecution
+    or ExecutionPolicyBypass
+
+| extend ActualMatch =
+    SuspiciousPath or SuspiciousArguments
+
+| extend TestResult = iff(
+    ActualMatch == ExpectedMatch,
+    "PASS",
+    "FAIL"
+)
+
+| extend DetectionReason = case(
+    SuspiciousPath and SuspiciousArguments,
+        "Risky path + suspicious arguments",
+    SuspiciousPath,
+        "Risky executable path",
+    SuspiciousArguments,
+        "Suspicious execution arguments",
+    "No suspicious indicators"
+)
+
+| project
+    TestCase,
+    ExecutablePath,
+    Arguments,
+    SuspiciousPath,
+    SuspiciousArguments,
+    DetectionReason,
+    ExpectedMatch,
+    ActualMatch,
+    TestResult
+
+| order by TestCase asc
+```
+
+## Expected Results
+
+All six test cases should return `PASS`.
+
+| Test Case | Expected Detection |
+|---|---|
+| TC01 | Suspicious executable path |
+| TC02 | Suspicious execution arguments |
+| TC03 | No detection |
+| TC04 | Risky path + suspicious arguments |
+| TC05 | No detection |
+| TC06 | Suspicious executable path |
+
+## Validation Notes
+
+- These tests validate the synthetic detection logic.
+- They do not prove that production Windows event fields are extracted correctly.
+- They do not establish that every attacker technique or argument variation is covered.
+- Additional tests should be added as new false positives and detection gaps are discovered.
+
+## Future Test Improvements
+
+1. Add variations in PowerShell argument casing and spacing.
+2. Test quoted executable paths.
+3. Test additional PowerShell encoded-command abbreviations.
+4. Add legitimate software scenarios involving user-writable directories.
+5. Add tests using sanitized real Windows event payloads.
+6. Validate task creation and modification events independently.
+
+## Current Status
+
+- Six synthetic test cases: previously validated.
+- Production event extraction: pending final schema validation.
+- Real-world false-positive coverage: ongoing.
